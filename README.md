@@ -53,3 +53,12 @@ To call the created API, you need to:
 ## Reference
 
 - [RFC: API Gateway IAM (AWS_IAM) Authorizers](https://github.com/awslabs/serverless-application-model/issues/781)
+
+
+
+
+Made with ❤️ by magamongo. Available on the [AWS Serverless Application Repository](https://aws.amazon.com/serverless)
+
+## License
+
+Apache License 2.0 (undefined)
