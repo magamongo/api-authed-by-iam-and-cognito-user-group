@@ -1,0 +1,198 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Function:
+    Timeout: 5
+    MemorySize: 256
+    Runtime: go1.x
+    Tracing: Active # https://docs.aws.amazon.com/lambda/latest/dg/lambda-x-ray.html
+  
+Resources:
+  # Lambda functions
+  # functions which can be called by Admin
+  AdminOnlyFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      FunctionName: admin-only
+      CodeUri: functions/admin_only
+      Handler: admin_only
+      Events:
+        CatchAll:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /admin_only
+            Method: GET
+            RestApiId: !Ref MyApi
+            Auth:
+              Authorizer: null
+              InvokeRole: !GetAtt MyAdminUserRole.Arn
+  # functions which can be called by Admin and Members
+  AllMembersFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      FunctionName: all-members
+      CodeUri: functions/all_members
+      Handler: all_members
+      Events:
+        CatchAll:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /all_members
+            Method: GET
+            RestApiId: !Ref MyApi
+            Auth:
+              Authorizer: null
+              InvokeRole: null
+
+  # API Gateway
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: dev
+      # CacheClusterEnabled: true
+      # CacheClusterSize: "0.5"
+      Cors: 
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: AWS_IAM
+        InvokeRole: !GetAtt MyMemberUserRole.Arn
+        AddDefaultAuthorizerToCorsPreflight: false
+  
+  # Cognito 
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Ref AWS::StackName
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
+        UnusedAccountValidityDays: 1
+      AliasAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 6
+          RequireLowercase: true
+          RequireNumbers: false
+          RequireSymbols: false
+          RequireUppercase: false
+
+  CognitoClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      GenerateSecret: false
+
+  CognitoIdPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: "api_authed_by_iam_and_cognito_user_group"
+      CognitoIdentityProviders: 
+        -
+          ClientId: !Ref CognitoClient
+          ProviderName: !GetAtt CognitoUserPool.ProviderName
+          ServerSideTokenCheck: true
+      AllowUnauthenticatedIdentities: false
+  
+  # User Group for Admin
+  CognitoAdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: 
+      Description: Admin group
+      GroupName: Admin
+      RoleArn: !GetAtt MyAdminUserRole.Arn
+      UserPoolId: !Ref CognitoUserPool
+ 
+  # User Group for Publishers
+  CognitoMemberGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties: 
+      Description: Members' group 
+      GroupName: Member
+      RoleArn: !GetAtt MyMemberUserRole.Arn
+      UserPoolId: !Ref CognitoUserPool
+  # IAM: Define Role for Admin User
+  MyAdminUserRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: {"Fn::Join": ["-", [{"Ref": "AWS::Region"}, {"Ref": "AWS::StackName"}, "admin"]]}
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Federated: 
+                - "cognito-identity.amazonaws.com"
+            Action: 
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: 
+                - !Ref CognitoIdPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr:
+                - "authenticated"
+      Policies: 
+          - 
+            PolicyName: MyAdminUserPolicy
+            PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                - 
+                  Effect: "Allow"
+                  Action: "execute-api:Invoke"
+                  Resource: 
+                  - !Join [ "/", [!Join [ ":", [ "arn:aws:execute-api",!Ref 'AWS::Region',!Ref 'AWS::AccountId',!Ref MyApi]], "*"]]
+  # IAM: Define Role for Member User                
+  MyMemberUserRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      RoleName: {"Fn::Join": ["-", [{"Ref": "AWS::Region"}, {"Ref": "AWS::StackName"}, "member"]]}
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - 
+            Effect: "Allow"
+            Principal: 
+              Federated: 
+                - "cognito-identity.amazonaws.com"
+            Action: 
+              - "sts:AssumeRoleWithWebIdentity"
+            Condition:
+              StringEquals:
+                cognito-identity.amazonaws.com:aud: 
+                - !Ref CognitoIdPool
+              ForAnyValue:StringLike:
+                cognito-identity.amazonaws.com:amr:
+                - "authenticated"
+      Policies: 
+          - 
+            PolicyName: MyMemberUserPolicy
+            PolicyDocument: 
+              Version: "2012-10-17"
+              Statement: 
+                - 
+                  Effect: "Allow"
+                  Action: "execute-api:Invoke"
+                  Resource: 
+                  - !Join [ "/", [!Join [ ":", [ "arn:aws:execute-api",!Ref 'AWS::Region',!Ref 'AWS::AccountId',!Ref MyApi]], "*/GET/all_members"]]
+Outputs:
+  CognitoUserPoolId:
+    Value: !Ref CognitoUserPool
+    Export:
+      Name: CognitoUserPoolId
+  CognitoIdPoolId:
+    Value: !Ref CognitoIdPool
+    Export:
+      Name: CognitoIdPoolId
+  CognitoUserPoolClientId:
+    Value: !Ref CognitoClient
+    Export:
+      Name: CognitoUserPoolClientId
+  BackendRegion:
+    Value: !Ref AWS::Region
+    Export:
+      Name: BackendRegion
