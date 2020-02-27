@@ -61,4 +61,4 @@ Made with ❤️ by magamongo. Available on the [AWS Serverless Application Repo
 
 ## License
 
-Apache License 2.0 (undefined)
+Apache License 2.0 (Apache-2.0)
