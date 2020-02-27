@@ -1,6 +1,18 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: api-authed-by-iam-and-cognito-user-group
+    Description: A boilerplate of SAM-based API service authorized by API Gateway IAM (AWS_IAM) Authorizers. the authorizers are associated with Cognito User Group.
+    Author: magamongo
+    SpdxLicenseId: Apache-2.0
+    LicenseUrl: LICENSE.txt
+    ReadmeUrl: README.md
+    Labels: ['Cognito', 'IAM', 'APIGateway', 'AWSSignatureVersion4']
+    SemanticVersion: 0.0.1
+    SourceCodeUrl: https://github.com/magamongo/api-authed-by-iam-and-cognito-user-group
+
 Globals:
   Function:
     Timeout: 5
