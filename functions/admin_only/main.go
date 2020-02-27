@@ -9,6 +9,12 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	return events.APIGatewayProxyResponse{
 		Body:       "this api can be called by admin user",
+		Headers: map[string]string{
+			"X-Requested-With": "*",
+			"Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,x-requested-with",
+			"Access-Control-Allow-Origin":      "*",
+			"Access-Control-Allow-Methods": "*",
+		},
 		StatusCode: 200,
 	}, nil
 }
